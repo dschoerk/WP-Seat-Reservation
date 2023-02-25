@@ -1,0 +1,128 @@
+:root {
+	--cell-size: 32px;
+	--grid-width: 10;
+}
+
+.plan {
+  display: inline-block;
+  position: relative;
+  min-width: 380px;
+  width: 380px;
+}
+
+.seat {
+  position: relative;
+  width: 32px; #var(--cell-size);
+  height: 32px; #var(--cell-size);
+  margin: 3px;
+  background-color: gray;
+  float: left;
+  text-align: center;
+  line-height: 32px; var(--cell-size);
+  cursor: pointer;
+  
+-webkit-user-select: none;        
+-moz-user-select: none; 
+-ms-user-select: none; 
+-o-user-select: none;
+user-select: none;
+}
+
+.rang1 {
+  background-color: grey;
+}
+
+.rang2 {
+  background-color: #8a85bf;
+}
+
+
+.seat.occupied {
+  cursor: no-drop;
+}
+
+.occupied {
+  background-color: #ff9999;
+}
+
+.occupied-buero {
+  background-color: #e58116;
+}
+
+.free {
+  background-color: green;
+}
+
+.selected {
+  position: relative;
+}
+
+.selected:before {
+  width: 100%;
+  font-family: FontAwesome;
+  font-style: normal;
+  font-weight: normal;
+  text-decoration: inherit;
+  text-align: center;
+  color: #000;
+  font-size: 25px;
+  padding-right: 0.5em;
+  position: absolute;
+  top: 0;
+  left: 0;
+  line-height: var(--cell-size);
+  padding: 0;
+  vertical-align: middle;
+  background-color: rgba(255,250,205,0.5);
+  content: "\f00c";
+}
+
+.deselected {
+  position: relative;
+}
+
+.deselected:before {
+  width: 100%;
+  font-family: FontAwesome;
+  font-style: normal;
+  font-weight: normal;
+  text-decoration: inherit;
+  text-align: center;
+  color: #000;
+  font-size: 25px;
+  padding-right: 0.5em;
+  position: absolute;
+  top: 0;
+  left: 0;
+  line-height: var(--cell-size);
+  padding: 0;
+  vertical-align: middle;
+  background-color: rgba(255,250,205,0.5);
+  content: "\f00d";
+}
+
+.gang {
+	width: 100%;
+    text-align: center;
+    float: left;
+	background-color: #b7b7b7;
+	margin-top: 5px;
+	margin-bottom: 5px;
+}
+
+.buehne {
+	width: 100%;
+    text-align: center;
+    float: left;
+	background-color: #b7b7b7;
+	margin-top: 5px;
+	margin-bottom: 5px;
+}
+
+.product-selection {
+	padding: 20px;
+}
+
+.list-seats-check {
+	
+}

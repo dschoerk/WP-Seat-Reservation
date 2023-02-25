@@ -1,0 +1,501 @@
+
+
+<?php
+
+/**
+ * Theater Reservation
+ *
+ * @package theater_reservation
+ * @version 0.1
+ * @author Dominik Schoerkhuber
+ *
+ *
+ * Plugin name: Theater Reservation
+ * Plugin URI:  http://schoerkhuber.net/
+ * Description: bla
+ * Version:     0.1
+ * Author:      Dominik Schoerkhuber
+ * Author URI:  http://schoerkhuber.net/
+ * License:     GPLv2
+ * Text Domain: theater_reservation
+ * Domain Path: /languages
+ */
+
+include 'reservation-service.php';
+
+
+function theater_reservation_init() {
+    wp_register_style( 'theater_reservation_plugin', plugins_url( 'theater_reservation_plugin/style.css' ) );
+    wp_enqueue_style('theater_reservation_plugin');
+    
+	//wp_deregister_script( 'jquery' );
+    //wp_enqueue_script( 'script-name', '//code.jquery.com/jquery-2.2.3.min.js', array(), '2.2.3' );
+	
+	wp_register_script( 'theater_reservation_plugin', plugins_url('theater_reservation_plugin/script.js'), array('jquery'));
+	wp_enqueue_script('theater_reservation_plugin');
+}
+add_action( 'wp_enqueue_scripts', 'theater_reservation_init');
+
+function date2str($date) {
+	$data_f = date_format(date_create($date), 'd.m.Y H:i');
+	return $data_f;
+}
+
+function get_show_by_id($showid) {
+	global $wpdb;
+	
+	$showid = esc_sql($showid);
+	$show = $wpdb->get_results( "SELECT id, name, date FROM wp_tgm_show WHERE id = '$showid'");
+	if(count($show) != 1)
+		die('error'); 
+	return $show[0];
+}
+
+function get_seats_by_ids($showid, $seatids) {
+	global $wpdb;
+	
+	$showid = esc_sql($showid);
+	$seatids = esc_sql(implode($seatids,","));
+	$seats = $wpdb->get_results( "SELECT id, price, caption, description FROM wp_tgm_seat s WHERE s.show = $showid AND s.id IN ($seatids)");
+	
+	if(count($seats) <= 0)
+		die('error'); 
+	return $seats;
+}
+
+function get_seats_for_reservation($reservationid) {
+	global $wpdb;
+	
+	$reservationid = esc_sql($reservationid);
+	$seats = $wpdb->get_results( "SELECT id, price, caption, description FROM wp_tgm_seat s LEFT JOIN wp_tgm_seat_reservation r ON s.id=r.seat AND s.show=r.show WHERE r.reservation = $reservationid");
+	
+	if(count($seats) <= 0)
+		die('error'); 
+	return $seats;
+}
+
+function reg_shortcode_fun( $atts ) {
+	
+	global $wpdb;
+	
+	//TEST 
+	//send_reservation_mail("Dominik Schörkhuber", "dschoerk@gmx.at");
+	
+	$atts = shortcode_atts( array(
+
+	), $atts, 'theater-reservation' );
+	
+	$reservation_step = "0";
+	if(isset($_POST["reservation_step"])) {
+		$reservation_step = $_POST["reservation_step"]; // first step
+	}
+	
+	$html .= reservation_header($reservation_step);
+	
+	if($reservation_step == "0")
+	{
+		// Auswahl der Vorstellung
+		
+		$shows = $wpdb->get_results( "SELECT id, name, date FROM wp_tgm_show" );
+		$shows_html = '';
+		foreach($shows as $show) {
+			//print_r($show);
+			$shows_html .= show_to_li($show);
+		}
+		
+		$html .= '<form action="" method="POST">';
+			$html .= '<div><select name="res_show">' . $shows_html . '</select></div>';
+			$html .= '<input type="hidden" value="1" name="reservation_step">';
+			$html .= '<input type="submit" style="margin-top: 5px" value="Weiter" name="submit_btn">';
+		$html .= '</form>';
+	}
+	else if($reservation_step == "1")
+	{
+		// Auswahl der Sitzplätze
+		
+		if(!isset($_POST["res_show"]))
+			die('error');
+		
+		$showid = esc_sql($_POST["res_show"]);
+		
+		$show = get_show_by_id($showid);
+		
+		$datestr = date2str($show->date);
+		$html .= "<h3>$show->name am $datestr</h3>";
+		
+		$html .= sitzplan($showid);
+		
+	}
+	else if($reservation_step == "2")
+	{
+		// Eingabe der Kontaktdaten
+		
+		if(!isset($_POST["res_show"]) || !isset($_POST["res_seats"]))
+			die('error');
+		
+		$seats = base64_encode(serialize($_POST["res_seats"]));
+		$showid = esc_sql($_POST["res_show"]);
+		// $show = $wpdb->get_results( "SELECT id, name, date FROM wp_tgm_show WHERE id = '$showid'");
+		
+		$html .= '<form action="" method="POST" style="max-width: 520px">';
+			$html .= '<input type="hidden" value="3" name="reservation_step">';
+			$html .= "
+				
+				<input type='text' style='display: block' name='res_forename' placeholder='Vorname' required>
+				<input type='text' style='display: block' name='res_surename' placeholder='Nachname' required>
+				<input type='email' style='display: block' name='res_email' placeholder='Email' required>
+			</div>
+			<input type='hidden' name='res_show' value='$showid'>
+			<input type='hidden' name='res_seats' value='$seats'>
+			<input type='submit' style='display: block' value='Weiter' name='submit_btn'>";
+		$html .= '</form>';
+	}
+	else if($reservation_step == "3")
+	{
+		// Daten Prüfen
+		
+		if(!isset($_POST["res_show"]))
+			die('error');
+		
+		$seats_post = esc_sql($_POST["res_seats"]);
+		$seatids = unserialize(base64_decode($seats_post));
+		$showid = esc_sql($_POST["res_show"]);
+		$forename = esc_sql($_POST["res_forename"]);
+		$surename = esc_sql($_POST["res_surename"]);
+		$email = esc_sql($_POST["res_email"]);
+		
+		$show = get_show_by_id($showid);
+		$show_date_str = date2str($show->date);
+		
+		$seats = get_seats_by_ids($showid, $seatids);
+		$seats_str = array();
+		$total_price = 0;
+		
+		foreach($seats as $seat) {
+			array_push($seats_str, $seat->description . "<span style='margin-left: 20px'>" . $seat->price . " €</span>");
+			$total_price += (int)$seat->price;
+		}
+		$seats_str = "<li class='list-seats-check'>".implode($seats_str, "</li><li class='list-seats-check'>")."</li>";
+		
+		
+		$html .= "<h3>Bitte überprüfen Sie Ihre Reservierung</h3>";
+		$html .= "<p>Name: $forename $surename</p>";
+		$html .= "<p>Email: $email</p>";
+		$html .= "<p>Vorstellung: $show->name am $show_date_str</p>";
+		$html .= "<p><div>Plätze:</div> <ul style='margin-bottom: 0px'>$seats_str</ul><div>Summe: $total_price €</div></p>";
+		
+		$html .= '<form action="" method="POST">';
+			$html .= '<input type="hidden" value="4" name="reservation_step">';
+			$html .= "<input type='hidden' name='res_forename' value='$forename'>
+			<input type='hidden' name='res_surename' value='$surename'>
+			<input type='hidden' name='res_email' value='$email'>
+			<input type='hidden' name='res_show' value='$showid'>
+			<input type='hidden' name='res_seats' value='$seats_post'>
+			<input type='submit' value='Reservieren!' name='submit_btn'>";
+		$html .= '</form>';
+	}
+	else if($reservation_step == "4")
+	{
+		// Abschluss
+		
+		$showid = esc_sql($_POST["res_show"]);
+		$forename = esc_sql($_POST["res_forename"]);
+		$surename = esc_sql($_POST["res_surename"]);
+		$email = esc_sql($_POST["res_email"]);
+		
+		$wpdb->query('START TRANSACTION');
+		$wpdb->query( "INSERT INTO wp_tgm_reservation (forename, surename, email) VALUES ('$forename', '$surename', '$email')");
+		if ($wpdb->last_error)
+			$error = true;
+		
+		$reservationid = $wpdb->insert_id;
+		$seats = $_POST["res_seats"];
+		$seatids = unserialize(base64_decode($seats));
+		
+		foreach($seatids as $seatid) {
+			$wpdb->query( "INSERT INTO wp_tgm_seat_reservation (seat, reservation, `show`) VALUES ($seatid, $reservationid, $showid)");
+			
+			if ($wpdb->last_error)
+				$error = true;
+		}
+		
+		if ($error) {
+			// error
+			$html .= "<h3>Hoppala! Ein Fehler ist aufgetreten</h3>";
+			$html .= "<p>Einer der gewählten Plätze is bereits belegt</p>";
+			$html .= "<a href='/karten' class='button'>Zurück</a>";
+			$wpdb->query('ROLLBACK');
+		} else {
+			// success
+			$html .= "<h3>Danke für Ihre Reservierung!</h3>";
+			$html .= "<p>Sie erhalten eine Bestätigungsemail</p>";
+			
+			send_reservation_mail($forename . ' ' . $surename, $email, $reservationid, $showid);
+			
+			$wpdb->query('COMMIT');
+		}
+	}
+	
+	return $html;
+	
+	/*return '
+		<form action="" method="POST">
+		<input type="text" name="reg_name">
+		<input type="submit" value="submit" name="submit_btn">
+		</form>
+	';*/
+}
+
+function reservation_header($step) {
+	if($step == "0")
+		return "<h3>Wählen Sie eine Vorstellung!</h3>";
+	else if($step == "1")
+		return "<h3>Wählen Sie Ihre Sitzplätze!<h3>";
+	else if($step == "2")
+		return "<h3>Geben Sie Ihre Kontaktdaten ein um die Reservierung abzuschließen!<h3>";
+}
+
+function show_to_li($show_row) {
+	return '<option value="' . $show_row->id . '">' . $show_row->name . ' am ' . date2str($show_row->date) . '</option>';
+}
+
+function process_registration_form() {
+    /**
+     * At this point, $_GET/$_POST variable are available
+     *
+     * We can do our normal processing here
+     */ 
+
+    // Sanitize the POST field
+    // Generate email content
+    // Send to appropriate email
+	
+	echo('some registration stuff');
+}
+
+add_action( 'admin_post_nopriv_registration_form', 'process_registration_form' );
+add_action( 'admin_post_registration_form', 'process_registration_form' );
+add_shortcode( 'theater-reservation', 'reg_shortcode_fun' );
+
+function find_seat($seats, $seatid) {
+	foreach($seats as $seat) {
+		if ($seatid == $seat->id) {
+			return $seat;
+		}
+	}
+	
+	die('error');
+}
+
+function sitzplan($showid) {
+	global $wpdb;
+	
+	$rows = 14;
+	$cols = 10;
+	
+	$showid = esc_sql($showid);
+	$seats = $wpdb->get_results( "SELECT seat.id, seat.caption, seat.price, res.reservation IS NOT NULL as taken FROM wp_tgm_seat seat LEFT JOIN wp_tgm_seat_reservation res ON seat.id = res.seat AND seat.show=res.show WHERE seat.show = '$showid'");		
+	
+	if(count($seats) < 1)
+		die("error");
+	
+	$html = "<div class='plan'>";
+	$html .= "<div class='buehne'>Bühne</div>";
+	for($row = 0; $row < $rows; $row++) {
+		
+		if($row == 7)
+			$html .= "<div class='gang'>Gang</div>";
+		
+		for($col = 0; $col < $cols; $col++) {
+			$seatid = $row * $cols + $col;
+			$seat = find_seat($seats, $seatid);
+			
+			$taken_class = "";
+			if($seat->taken)
+				$taken_class = "occupied";
+			
+			$html .= "<div class='seat $taken_class' seatid='$seat->id' price='$seat->price'>$seat->caption</div>";
+		}
+	}
+	$html .= "</div>";
+	
+	$html .= "
+		<div style='display: inline-block; width: 360px; float: right;'>
+			<div class='product-selection'>
+				<p>
+					<span id='num-selected'>0</span> Plätze ausgewählt
+				</p>
+				<p>
+					Betrag: <span id='price'>0</span>€
+				</p>
+				<p>
+					Reservierte Tickets sind an der Abendkasse zu bezahlen.
+				</p>
+				
+				<form id='reservation_form' action='' method='POST'>
+					<input type='hidden' value='2' name='reservation_step'>
+					<input type='hidden' value='$showid' name='res_show'>
+					<input type='submit' value='Weiter' name='submit_btn'>
+				</form>
+			</div>
+		</div>
+	";
+	
+	
+	return $html;
+}
+
+// inserts a new show plus seats
+function create_show($name, $date) {
+	global $wpdb;
+	
+	echo("Create a show");
+	
+	$name = esc_sql($name);
+	$date = esc_sql($date);
+	
+	$wpdb->query('START TRANSACTION');
+	$wpdb->query( "INSERT INTO wp_tgm_show (name, date) VALUES ('$name', '$date')");
+	if ($wpdb->last_error) {
+		echo 'Error' . $wpdb->last_error;
+		$wpdb->query('ROLLBACK');
+		return;
+	}
+	
+	$showid = $wpdb->insert_id;
+	echo("showid: $showid");
+	
+	$rows = 14;
+	$cols = 10;
+	
+	for($row = 0; $row < $rows; $row++) {
+		for($col = 0; $col < $cols; $col++) {
+			$seatid = $row * $cols + $col;
+			$caption = "" . ($seatid + 1);
+			$description = "Reihe: " . ($row+1) . " Platz: " . ($col+1);
+			
+			$price = 8;
+			if($row <= 7)
+				$price = 10;
+			
+			// echo("insert seat: ($seatid, $showid, $caption, $price) ");
+			
+			$showid = esc_sql($showid);
+			$seatid = esc_sql($seatid);
+			$caption = esc_sql($caption);
+			$description = esc_sql($description);
+			$price = esc_sql($price);
+			
+			$wpdb->query( "INSERT INTO `wp_tgm_seat` (`id`, `show`, `caption`, `description`, `price`) VALUES ('$seatid', '$showid', '$caption', '$description', '$price')");
+		}
+	}
+	
+	if ($wpdb->last_error) {
+		echo 'Error' . $wpdb->last_error;
+		$wpdb->query('ROLLBACK');
+		return;
+	}
+	
+	$wpdb->query('COMMIT');
+}
+
+function send_reservation_mail($name, $mail, $reservationid, $showid) {
+	$to = "$name <$mail>";
+	$subject = 'Ihre Karten Reservierung';
+	
+	
+	$show = get_show_by_id($showid);
+	$seats = get_seats_for_reservation($reservationid);
+	
+	$seats_str = array();
+	$total_price = 0;
+	foreach($seats as $seat) {
+		array_push($seats_str, $seat->description . "<span style='margin-left: 20px'>" . $seat->price . " €</span>");
+		$total_price += (int)$seat->price;
+	}
+	$seats_str = "<li>".implode($seats_str, "</li><li>")."</li>";
+	
+	$randval = rand();
+	$random = "<input type='hidden' value='$randval'>";
+	$show_str = $show->name . " am " . date2str($show->date);
+	
+	$body = file_get_contents(plugins_url( 'theater_reservation_plugin/tgm_reservierungsmail.html' ));
+	$body = str_replace("%%SEATS%%", $seats_str, $body);
+	$body = str_replace("%%SHOW%%", $show_str, $body);
+	$body = str_replace("%%NAME%%", $name, $body);
+	//$body = str_replace("%%RANDOM%%", $random, $body); // prevents gmail citing
+	$body = randomize($body);
+	$body = randomize($body, '</span>');
+	
+	//$body = 'Le great reservation <p style="color: red">Super HTML</p>';
+	$headers = array('Content-Type: text/html; charset=UTF-8');
+ 
+	wp_mail( $to, $subject, $body, $headers );
+}
+
+//Helper to randomize HTML contents
+function randomize($html, $tag = '</p>') {  
+  //Create a 5 char random string for email content to be unique
+  $hash = /*crypto
+    .createHash('md5')
+    .update(time)
+    .digest('hex')*/
+	base64_encode(md5(time())).substr(0, 5);
+
+  //Create HTML string to replace with and regex
+  $str = '<span style="display: none !important;">' . $hash . '</span>' . $tag;
+  //$regex = new RegExp(tag, 'g');
+
+  //Replace in HTML
+  return str_replace($tag, $str, $html);
+}
+
+function xyz_filter_wp_mail_from($email) {
+	return "reservation@theater-muehlbach.at";
+}
+add_filter("wp_mail_from", "xyz_filter_wp_mail_from");
+
+function xyz_filter_wp_mail_from_name($from_name){
+	return "Theater Mühlbach";
+}
+add_filter("wp_mail_from_name", "xyz_filter_wp_mail_from_name");
+
+ /*create_show("The Great New Show", "2018-02-01 20:00:00");
+ create_show("The Great New Show", "2018-02-02 20:00:00");
+ create_show("The Great New Show", "2018-02-03 20:00:00");*/
+
+
+// admin page
+
+function t($t, $cont) {
+	echo("<{$t}>{$cont}</{$t}>");
+}
+
+function reservation_test_page()
+{
+	SELECT name, date, s.id, sum(1) as seats_reserved FROM wp_tgm_show s LEFT JOIN wp_tgm_seat_reservation res ON res.show = s.id GROUP BY s.id
+	$shows = ReservationService::get_shows();
+
+	for($shows as $show) {
+		t("div", $show->name);
+		t("div", $show->date);
+	}
+}
+
+function reservation_sub_test_page()
+{
+	echo('<div class="wrap"><h2>Welcome To My Plugin 2</h2></div>');
+}
+
+
+add_action( 'admin_menu', 'theater_admin_menu' );
+
+function theater_admin_menu() {
+	add_menu_page( 'Theater Reservation Plugin', 'Reservations', 'manage_options', 'reservation/test.php', 'reservation_test_page', 'dashicons-tickets', 6  );
+	add_submenu_page( 'reservation/test.php', 'Shows', 'Shows', 'manage_options', 'reservation/shows.php', 'reservation_sub_test_page' );
+}
+
+
+?>
+
+
