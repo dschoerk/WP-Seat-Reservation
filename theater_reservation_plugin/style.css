@@ -4,21 +4,21 @@
 }
 
 .plan {
-  display: inline-block;
-  position: relative;
+  display: grid;
+  grid-template-columns: repeat(29, 28px [col-start]);
+  grid-template-rows: repeat(4, 42px [col-start]);
   min-width: 380px;
   width: 380px;
 }
 
 .seat {
-  position: relative;
-  width: 32px; #var(--cell-size);
-  height: 32px; #var(--cell-size);
+  width: 28px; #var(--cell-size);
+  height: 28px; #var(--cell-size);
   margin: 3px;
   background-color: gray;
   float: left;
   text-align: center;
-  line-height: 32px; var(--cell-size);
+  line-height: 28px; var(--cell-size);
   cursor: pointer;
   
 -webkit-user-select: none;        
@@ -26,6 +26,15 @@
 -ms-user-select: none; 
 -o-user-select: none;
 user-select: none;
+}
+
+.space {
+  position: relative;
+  margin: 3px;
+  float: left;
+  width: 28px; #var(--cell-size);
+  height: 28px; #var(--cell-size);
+  line-height: 28px; var(--cell-size);
 }
 
 .rang1 {
@@ -36,6 +45,9 @@ user-select: none;
   background-color: #8a85bf;
 }
 
+.rang3 {
+  background-color: #82d09a;
+}
 
 .seat.occupied {
   cursor: no-drop;
