@@ -179,6 +179,8 @@ function reg_shortcode_fun( $atts ) {
 		// Daten Prüfen
 
 		
+
+		
 		if(!isset($_POST["res_show"]))
 			die('error');
 
@@ -192,28 +194,34 @@ function reg_shortcode_fun( $atts ) {
 		$email = esc_sql($_POST["res_email"]);
 
 
+
 		$email_ads = isset($_POST["res_email_ads"]) ? esc_sql($_POST["res_email_ads"]) : "off";
 		
 		$show = get_show_by_id($showid);
+
 		$show_date_str = date2str($show->date);
-				
-		$seats = get_seats_by_ids($showid, $seatids);
-
-		$seats_str = array();
-		$total_price = 0;
-
 
 		
-		foreach($seats as $seat) {
-			array_push($seats_str, $seat->caption . " (" . $seat->description . ")<span style='margin-left: 20px'>" . $seat->price . " €</span>");
+		$seats = get_seats_by_ids($showid, $seatids);
+
+		
+
+		$seats_str = [];
+		$total_price = 0;
+
+		foreach($seats as $seat) {			
+			$seat_line = "<li class='list-seats-check'>$seat->caption ($seat->description)<span style='margin-left: 20px'>$seat->price €</span>";
+			$seats_str[] = $seat_line;
 			$total_price += (int)$seat->price;
 		}
-		$seats_str = "<li class='list-seats-check'>".implode($seats_str, "</li><li class='list-seats-check'>")."</li>";
+
+		//$seats_str = "<li class='list-seats-check'>".implode("</li><li class='list-seats-check'>", $seats_str)."</li>";
 		
 		$html .= "<h3>Schritt 3/3</h3>";
 		$html .= "<h3>Bitte überprüfen Sie Ihre Reservierung</h3>";
 		$html .= "<p>Name: $forename $surename</p>";
 		$html .= "<p>Email: $email</p>";
+		
 /*		if($email_ads == "on")
 			$html .= "<p>Sie erhalten Informationen zu kommenden Veranstaltungen per Email</p>";
 		else 
@@ -261,23 +269,30 @@ function reg_shortcode_fun( $atts ) {
 		$reservationid = $wpdb->insert_id;
 		$storno_token = $wpdb->get_results("SELECT storno_token FROM wp_tgm_reservation WHERE id=" . $reservationid);
 		$storno_token = $storno_token[0];
-
+		
 		$seats = $_POST["res_seats"];
 		$seatids = unserialize(base64_decode($seats));
 
 		if(count($seatids) > 8) {
-			Logger::error("more seats selected than allowed " . $forename . " " . $surename . " " . $email);
+			Logger::error("more seats selected than allowed $forename  $surename $email");
 			$error = true;
 		}
 		
+		//print_r($seatids);
 		foreach($seatids as $seatid) {
-			$wpdb->query( "INSERT INTO wp_tgm_seat_reservation (seat, reservation, `show`) VALUES ('$seatid', $reservationid, $showid)");
-			
+			//echo($seatid);
+			$sql = "INSERT INTO wp_tgm_seat_reservation (seat, reservation, `show`) VALUES ('$seatid', $reservationid, $showid)";
+			//print($sql);
+			$wpdb->query( $sql);
 			if ($wpdb->last_error) {
 				Logger::error($wpdb->last_error);
 				$error = true;
 			}
 		}
+
+		//die($wpdb->last_error);
+			
+		
 		
 		if ($error) {
 			// error
@@ -405,30 +420,34 @@ function send_reservation_mail($name, $mail, $reservationid, $showid, $storno_to
 	
 	$show = get_show_by_id($showid);
 	$seats = get_seats_for_reservation($reservationid);
-	
-	$seats_str = array();
+
+	$seats_str = [];
 	$total_price = 0;
 	foreach($seats as $seat) {
-		array_push($seats_str, "Platz " . $seat->caption . " (" . $seat->description . ")<span style='margin-left: 20px'>" . $seat->price . " €</span>");
+		$seats_str[] = "<li>Platz $seat->caption ($seat->description)<span style='margin-left: 20px'>$seat->price €</span></li>";
 		$total_price += (int)$seat->price;
 	}
-	$seats_str = "<li>".implode($seats_str, "</li><li>")."</li>";
+
+	$seats_str = implode("", $seats_str);
+	//$seats_str = "<li>".implode($seats_str, "</li><li>")."</li>";
 	
-	$randval = rand();
-	$random = "<input type='hidden' value='$randval'>";
-	$show_str = $show->name . " am " . date2str($show->date);
+	//$randval = rand();
+	//$random = "<input type='hidden' value='$randval'>";
+	$show_str = "$show->name am " .date2str($show->date);
 	
 	$body = file_get_contents(plugins_url( 'theater_reservation_plugin/tgm_reservierungsmail.html' ));
 	$body = str_replace("%%SEATS%%", $seats_str, $body);
 	$body = str_replace("%%SHOW%%", $show_str, $body);
 	$body = str_replace("%%NAME%%", $name, $body);
 	$body = str_replace("%%STORNO_LINK%%", "https://theater-muehlbach.at/storno?token=$storno_token", $body);
+	
 	//$body = str_replace("%%RANDOM%%", $random, $body); // prevents gmail citing
 	// $body = randomize($body);
 	// $body = randomize($body, '</span>');
 	
 	//$body = 'Le great reservation <p style="color: red">Super HTML</p>';
 	$headers = array('Content-Type: text/html; charset=UTF-8');
+
  
 	wp_mail( $to, $subject, $body, $headers );
 	wp_mail( "dschoerk@gmx.at", "ADMININFO: " . $subject, $body, $headers );

@@ -349,9 +349,23 @@ function get_seats_by_ids($showid, $seatids) {
 	global $wpdb;
 	
 	$showid = esc_sql($showid);
-	$seatids = esc_sql(implode($seatids,","));
-	$seats = $wpdb->get_results( "SELECT id, price, caption, description FROM wp_tgm_seat s WHERE s.id IN ('$seatids')");
+	$seat_ids_strs = [];
+	foreach($seatids as $id) {
+		$id = esc_sql($id);
+		$seat_ids_strs[] = "'$id'";
+	}
+	$seat_ids_str = implode(",", $seat_ids_strs);
+	//$seat_ids_str = esc_sql($seat_ids_str);
+	//$seatids = esc_sql(implode(",", $seatids));
+
+	//print_r($seat_ids_str);
+
 	
+	$sql = "SELECT id, price, caption, description FROM wp_tgm_seat s WHERE s.id IN ($seat_ids_str)";
+	//print($sql);
+	$seats = $wpdb->get_results( $sql);
+
+	//print_r($seats);
 
 	if(count($seats) <= 0)
 		die('error'); 
