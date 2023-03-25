@@ -1,10 +1,193 @@
 <?php
 
 require_once('logging.php');
+require_once('sitzplan.php');
 
 class ReservationService {
 
 //	public static prefix = "wp_tgm_";
+
+	public static function create_tables() {
+
+		require_once( ABSPATH . 'wp-admin/includes/upgrade.php');
+
+		$sql = "
+		CREATE TABLE `wp_tgm_show` (
+		`id` int(11) NOT NULL AUTO_INCREMENT,
+		`name` varchar(128) NOT NULL,
+		`date` datetime NOT NULL,
+		`reservation_until` datetime NOT NULL,
+		PRIMARY KEY (`id`)
+		) ENGINE=InnoDB DEFAULT CHARSET=latin1;";
+		dbDelta($sql);
+
+		$sql = "
+			CREATE TABLE `wp_tgm_reservation` (
+			`id` int(11) NOT NULL AUTO_INCREMENT,
+			`forename` varchar(64) NOT NULL,
+			`surename` varchar(64) NOT NULL,
+			`email` varchar(64) NOT NULL,
+			`email_ads` tinyint(1) NOT NULL,
+			`date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			`storno_token` varchar(32) NOT NULL,
+			PRIMARY KEY (`id`)
+		  ) ENGINE=InnoDB DEFAULT CHARSET=latin1;";
+		dbDelta($sql);
+		
+		$sql = "
+		CREATE TABLE `wp_tgm_seat` (
+			`id` varchar(11) NOT NULL,
+			`price` int(11) NOT NULL,
+			`caption` varchar(12) NOT NULL,
+			`description` varchar(64) NOT NULL,
+			PRIMARY KEY (`id`)
+		  ) ENGINE=InnoDB DEFAULT CHARSET=latin1;";
+		dbDelta($sql);
+		
+		$sql = "
+		CREATE TABLE `wp_tgm_seat_reservation` (
+		`seat` varchar(11) NOT NULL,
+		`reservation` int(11) NOT NULL,
+		`show` int(11) NOT NULL,
+		`payed` tinyint(1) NOT NULL DEFAULT '0',
+		PRIMARY KEY (`seat`,`show`),
+		KEY `show` (`show`),
+		KEY `reservation` (`reservation`),
+		CONSTRAINT `wp_tgm_seat_reservation_ibfk_1` FOREIGN KEY (`seat`) REFERENCES `wp_tgm_seat` (`id`),
+  		CONSTRAINT `wp_tgm_seat_reservation_ibfk_2` FOREIGN KEY (`show`) REFERENCES `wp_tgm_show` (`id`),
+  		CONSTRAINT `wp_tgm_seat_reservation_ibfk_3` FOREIGN KEY (`reservation`) REFERENCES `wp_tgm_reservation` (`id`)
+		) ENGINE=InnoDB DEFAULT CHARSET=latin1;";
+		dbDelta($sql);
+
+		$sql = "
+		CREATE TABLE `wp_tgm_settings` (
+		`setting` varchar(64) NOT NULL,
+		`value` varchar(128) NOT NULL,
+		PRIMARY KEY (`setting`)
+		) ENGINE=InnoDB DEFAULT CHARSET=latin1;";
+		dbDelta($sql);
+
+		if ($wpdb->get_var("SELECT COUNT(*) FROM wp_tgm_seat") > 0)
+		{
+			// check seat config
+			//echo("check");
+			$seat_config = make_seat_config();
+
+			$seat_data = $wpdb->get_results("SELECT id FROM wp_tgm_seat");
+
+			foreach($seat_config as $row => $seats) {
+				foreach($seats as $seat) {
+					if ($seat > 0) {// ignore 0's
+
+						find_seat($seat_data, "$row-$seat");
+					}
+				}
+			}
+		}
+		else
+		{
+			// create seat config
+
+			$seat_config = make_seat_config();
+
+			foreach($seat_config as $row => $seats) {
+				foreach($seats as $seat) {
+					if ($seat == 0) // ignore 0's
+						continue;
+
+					$seatid = "$row-$seat";
+					$caption = "Reihe: $row Sitz: $seat";
+					$description = $caption;
+					$price = 10;
+					if($row >= 1 && $row <= 5)
+						$price = 15;
+					elseif($row >= 6 && $row <= 9)
+						$price = 12;
+					else
+						$price = 10;
+
+					$wpdb->query( "INSERT INTO `wp_tgm_seat` (`id`, `caption`, `description`, `price`) VALUES ('$seatid', '$caption', '$description', '$price')");
+				}
+			}
+		}	
+		
+		/*
+		$rows = 14;
+		$cols = 10;
+		
+		for($row = 0; $row < $rows; $row++) {
+			for($col = 0; $col < $cols; $col++) {
+				$seatid = $row * $cols + $col;
+				$caption = "" . ($seatid + 1);
+				$description = "Reihe: " . ($row+1) . " Platz: " . ($col+1);
+				
+				$price = 10;
+				if($row <= 7)
+					$price = 12;
+				
+				// echo("insert seat: ($seatid, $showid, $caption, $price) ");
+				
+				$showid = esc_sql($showid);
+				$seatid = esc_sql($seatid);
+				$caption = esc_sql($caption);
+				$description = esc_sql($description);
+				$price = esc_sql($price);
+				
+				$wpdb->query( "INSERT INTO `wp_tgm_seat` (`id`, `caption`, `description`, `price`) VALUES ('$seatid', '$caption', '$description', '$price')");
+			}
+		}*/
+		
+		/*if ($wpdb->last_error) {
+			echo 'Error' . $wpdb->last_error;
+			$wpdb->query('ROLLBACK');
+			return;
+		}*/
+
+		
+
+		/*$sql = "
+		ALTER TABLE `wp_tgm_reservation` ADD PRIMARY KEY (`id`);
+	    ALTER TABLE `wp_tgm_reservation` MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+		";
+		if(!$wpdb->query($sql)){die($wpdb->last_error);}*/
+		
+		/*$sql = "
+			ALTER TABLE `wp_tgm_seat` ADD PRIMARY KEY (`id`,`show`), ADD KEY `show` (`show`);
+			ALTER TABLE `wp_tgm_seat` ADD CONSTRAINT `wp_tgm_seat_ibfk_1` FOREIGN KEY (`show`) REFERENCES `wp_tgm_show` (`id`);
+		";
+		if(!$wpdb->query($sql)){die($wpdb->last_error);}*/
+		
+		/*$sql = "
+		ALTER TABLE `wp_tgm_seat_reservation` 
+		ADD PRIMARY KEY (`seat`,`show`),
+		ADD KEY `show` (`show`),
+		ADD KEY `reservation` (`reservation`);
+		";
+		if(!$wpdb->query($sql)){die($wpdb->last_error);}*/
+
+		/*$sql = "
+		ALTER TABLE `wp_tgm_seat_reservation`
+  		ADD CONSTRAINT `wp_tgm_seat_reservation_ibfk_1` FOREIGN KEY (`seat`) REFERENCES `wp_tgm_seat` (`id`),
+  		ADD CONSTRAINT `wp_tgm_seat_reservation_ibfk_2` FOREIGN KEY (`show`) REFERENCES `wp_tgm_show` (`id`),
+  		ADD CONSTRAINT `wp_tgm_seat_reservation_ibfk_3` FOREIGN KEY (`reservation`) REFERENCES `wp_tgm_reservation` (`id`);
+		";
+		if(!$wpdb->query($sql)){die($wpdb->last_error);}
+		
+
+		$sql = "
+		ALTER TABLE `wp_tgm_settings` ADD PRIMARY KEY (`setting`);
+		";
+		if(!$wpdb->query($sql)){die($wpdb->last_error);}
+
+		$sql = "
+			ALTER TABLE `wp_tgm_show` ADD PRIMARY KEY (`id`);
+			ALTER TABLE `wp_tgm_show` MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+		";
+		if(!$wpdb->query($sql)){die($wpdb->last_error);}*/
+		
+		
+
+	}
 
 	public static function get_shows() {
 		global $wpdb;
@@ -28,7 +211,7 @@ class ReservationService {
 		global $wpdb;
 		
 		$showid = esc_sql($showid);
-        	$res = $wpdb->get_results( "SELECT forename, surename, email, reservation, GROUP_CONCAT(IF(sr.payed, CONCAT(s.caption, ' (bez)'), s.caption) SEPARATOR ', ') as seats, SUM(price) as totalprice FROM wp_tgm_reservation r LEFT JOIN wp_tgm_seat_reservation sr ON r.id = sr.reservation LEFT JOIN wp_tgm_seat s ON sr.seat=s.id AND sr.show=s.show WHERE sr.show={$showid} GROUP BY r.id ORDER BY surename ASC");
+        	$res = $wpdb->get_results( "SELECT forename, surename, email, reservation, GROUP_CONCAT(IF(sr.payed, CONCAT(s.caption, ' (bez)'), s.caption) SEPARATOR ', ') as seats, SUM(price) as totalprice FROM wp_tgm_reservation r LEFT JOIN wp_tgm_seat_reservation sr ON r.id = sr.reservation LEFT JOIN wp_tgm_seat s ON sr.seat=s.id WHERE sr.show={$showid} GROUP BY r.id ORDER BY surename ASC");
 		$wpdb->show_errors();
         	return $res;
 	}
@@ -93,7 +276,7 @@ class ReservationService {
 
 	public static function add_reservation($showid, $already_payed, $forename, $surename, $email, $email_ads, $seatids, $limit_seats = false, $send_mails = true) {
 		global $wpdb;
-
+		
 		Logger::info("begin add_reservation");
 
 		$wpdb->query('START TRANSACTION');
@@ -113,9 +296,12 @@ class ReservationService {
 			Logger::error("more seats selected than allowed " . $forename . " " . $surename . " " . $email);
 			$error = true;
 		}
+
+		
 		
 		foreach($seatids as $seatid) {
-			$wpdb->query( "INSERT INTO wp_tgm_seat_reservation (seat, reservation, `show`, payed) VALUES ($seatid, $reservationid, $showid, $already_payed)");
+			$sql = "INSERT INTO wp_tgm_seat_reservation (seat, reservation, `show`, payed) VALUES ('$seatid', $reservationid, $showid, $already_payed)";
+			$wpdb->query( $sql);
 			
 			if ($wpdb->last_error) {
 				Logger::error($wpdb->last_error);
@@ -137,6 +323,8 @@ class ReservationService {
 			Logger::info("add_reservation success showid=$showid forename=$forename surename=$surename email=$email seatids=".serialize($seatids) . " token=" . $storno_token->storno_token);
 			return true;
 		}
+
+		
 	}
 }
 
@@ -162,8 +350,9 @@ function get_seats_by_ids($showid, $seatids) {
 	
 	$showid = esc_sql($showid);
 	$seatids = esc_sql(implode($seatids,","));
-	$seats = $wpdb->get_results( "SELECT id, price, caption, description FROM wp_tgm_seat s WHERE s.show = $showid AND s.id IN ($seatids)");
+	$seats = $wpdb->get_results( "SELECT id, price, caption, description FROM wp_tgm_seat s WHERE s.id IN ('$seatids')");
 	
+
 	if(count($seats) <= 0)
 		die('error'); 
 	return $seats;
@@ -173,7 +362,7 @@ function get_seats_for_reservation($reservationid) {
 	global $wpdb;
 	
 	$reservationid = esc_sql($reservationid);
-	$seats = $wpdb->get_results( "SELECT id, price, caption, description FROM wp_tgm_seat s LEFT JOIN wp_tgm_seat_reservation r ON s.id=r.seat AND s.show=r.show WHERE r.reservation = $reservationid");
+	$seats = $wpdb->get_results( "SELECT id, price, caption, description FROM wp_tgm_seat s LEFT JOIN wp_tgm_seat_reservation r ON s.id=r.seat WHERE r.reservation = $reservationid");
 	
 	if(count($seats) <= 0)
 		die('error'); 
