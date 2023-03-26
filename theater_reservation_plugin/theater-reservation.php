@@ -214,6 +214,7 @@ function reg_shortcode_fun( $atts ) {
 			$seats_str[] = $seat_line;
 			$total_price += (int)$seat->price;
 		}
+		$seats_str = implode("", $seats_str);
 
 		//$seats_str = "<li class='list-seats-check'>".implode("</li><li class='list-seats-check'>", $seats_str)."</li>";
 		

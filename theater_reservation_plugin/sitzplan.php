@@ -80,7 +80,7 @@ function sitzplan($showid, $frontend = true, $show_buttons = true) {
 	
 	if($frontend) {
         $html .= "
-            <div style='display: inline-block; width: 360px; float: right;'>
+            <div>
                 <div class='product-selection'>
                     <p>
                         <span id='num-selected'>0</span> Plätze ausgewählt

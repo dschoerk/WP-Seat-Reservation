@@ -1,14 +1,13 @@
 :root {
-	--cell-size: 32px;
+	--cell-size: 28px;
 	--grid-width: 10;
 }
 
 .plan {
   display: grid;
-  grid-template-columns: repeat(29, 28px [col-start]);
+  grid-template-columns: repeat(28, 28px [col-start]) 100px [col-start];
   grid-template-rows: repeat(4, 42px [col-start]);
   min-width: 380px;
-  width: 380px;
 }
 
 .seat {
@@ -16,7 +15,6 @@
   height: 28px; #var(--cell-size);
   margin: 3px;
   background-color: gray;
-  float: left;
   text-align: center;
   line-height: 28px; var(--cell-size);
   cursor: pointer;
@@ -124,9 +122,8 @@ user-select: none;
 
 .buehne {
 	width: 100%;
-    text-align: center;
-    float: left;
-	background-color: #b7b7b7;
+  text-align: center;
+  background-color: #b7b7b7;
 	margin-top: 5px;
 	margin-bottom: 5px;
 }
