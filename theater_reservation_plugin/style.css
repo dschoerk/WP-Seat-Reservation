@@ -5,9 +5,10 @@
 
 .plan {
   display: grid;
-  grid-template-columns: repeat(28, 28px [col-start]) 100px [col-start];
+  grid-template-columns: repeat(28, 3% [col-start]) auto [col-start];
   grid-template-rows: repeat(4, 42px [col-start]);
   min-width: 380px;
+  justify-items: center;
 }
 
 .seat {
